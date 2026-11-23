@@ -13,8 +13,14 @@ Node contract (see BBC.md in the flow app):
 The ATMO v5 store is zarr v3 with one object per timestep and a Blosc(zstd) codec, so a
 chunk object can be decoded on its own without xarray or zarr.
 
-Every secret arrives through the environment (the flow node's `env` map resolves
-{env.*} references at execution time); nothing here reads a config file.
+Credentials arrive through the environment and nothing here reads a config file. The
+flow node names stored connections in its `connections` map (ENV PREFIX => connection)
+and the engine exports each as {PREFIX}_{KEY} variables at execution time:
+
+  ATMO_S3     S3 connection      ATMO_S3_KEY, _SECRET, _REGION, _BUCKET, _ROOT
+  NWP_DB      database           NWP_DB_HOST, _PORT, _DATABASE, _USERNAME, _PASSWORD
+  REDIS       Redis store        REDIS_HOST, _PORT, _DATABASE, _USERNAME, _PASSWORD
+  NWP_PUBLIC  delivery disk      NWP_PUBLIC_ROOT (and _URL when the disk has one)
 """
 import json
 import os
@@ -254,6 +260,15 @@ def tool(name, env_name):
 
 
 def s3_root():
+    """s3://bucket/prefix/ holding one folder per run.
+
+    From an S3 connection: its bucket plus its root (the key prefix, e.g. forecasts/v5).
+    Without a bucket, ATMO_S3_ROOT may carry a full s3:// URL instead.
+    """
+    bucket = env("ATMO_S3_BUCKET")
+    if bucket:
+        prefix = (env("ATMO_S3_ROOT") or "").strip("/")
+        return "s3://%s/%s" % (bucket, prefix + "/" if prefix else "")
     root = env("ATMO_S3_ROOT", "s3://atmo-philippines-exchange/forecasts/v5/")
     return root if root.endswith("/") else root + "/"
 
@@ -267,8 +282,13 @@ def _s5cmd(args):
     child_env = dict(os.environ)
     child_env["AWS_REGION"] = env("ATMO_S3_REGION", "us-east-1")
     if not profile:
-        child_env["AWS_ACCESS_KEY_ID"] = env("ATMO_S3_ACCESS_KEY_ID", required=True)
-        child_env["AWS_SECRET_ACCESS_KEY"] = env("ATMO_S3_SECRET_ACCESS_KEY", required=True)
+        # ATMO_S3_KEY / _SECRET are what an S3 connection exports.
+        key = env("ATMO_S3_KEY") or env("ATMO_S3_ACCESS_KEY_ID")
+        secret = env("ATMO_S3_SECRET") or env("ATMO_S3_SECRET_ACCESS_KEY")
+        if not key or not secret:
+            fail("no S3 credentials: the node's ATMO_S3 connection has no key/secret", 2)
+        child_env["AWS_ACCESS_KEY_ID"] = key
+        child_env["AWS_SECRET_ACCESS_KEY"] = secret
     return subprocess.run(cmd + args, env=child_env, capture_output=True, text=True)
 
 
@@ -352,6 +372,15 @@ def db_connect():
         autocommit=False,
         cursorclass=pymysql.cursors.DictCursor,
     )
+
+
+def public_root(prefix):
+    """Absolute path of the NWP tree on the host that serves it: the delivery disk's
+    root plus the folder inside it (e.g. .../PANaHON + NWP). '' when unknown."""
+    root = (env("NWP_PUBLIC_ROOT") or "").rstrip("/")
+    if not root:
+        return ""
+    return root + ("/" + prefix.strip("/") if prefix.strip("/") else "")
 
 
 def utc_now():

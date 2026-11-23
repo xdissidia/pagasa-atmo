@@ -9,7 +9,7 @@ When it claims a run it
   2. creates (or re-claims) the run's model_forecasts row in the ETL database
   3. emits the run and its batches of frames for the rest of the flow
 
-Environment: ATMO_S3_* (see atmo_common), NWP_DB_*.
+Environment: ATMO_S3_* and NWP_DB_* (the node's ATMO_S3 and NWP_DB connections).
 """
 import argparse
 import json

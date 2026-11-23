@@ -7,7 +7,7 @@
     "find_run": {
       "entrypoint": "find_run.py",
       "label": "Find and claim run",
-      "description": "Halts unless a complete, unclaimed run is on S3. Prepares the grid, creates the model_forecasts row and emits the run with its batches.",
+      "description": "Halts unless a complete, unclaimed run is on S3. Prepares the grid, creates the model_forecasts row and emits the run with its batches. Connections: ATMO_S3, NWP_DB.",
       "default_queue": "default",
       "default_timeout": 300,
       "args": [
@@ -69,7 +69,7 @@
     "rain_total": {
       "entrypoint": "rain_total.py",
       "label": "Running rain total",
-      "description": "Downloads every precipitation chunk of the run and writes the running total each frame's TPRATE band uses. Re-emits the run manifest.",
+      "description": "Downloads every precipitation chunk of the run and writes the running total each frame's TPRATE band uses. Re-emits the run manifest. Connections: ATMO_S3.",
       "default_queue": "default",
       "default_timeout": 1800,
       "args": [
@@ -87,7 +87,7 @@
     "frames": {
       "entrypoint": "frames.py",
       "label": "Build a batch of frames",
-      "description": "For each frame in the batch: download chunks, build the COG TIFF and (with GRIB2JSON_BIN) the wind .bin. Finished frames are skipped on retry.",
+      "description": "For each frame in the batch: download chunks, build the COG TIFF and (with GRIB2JSON_BIN) the wind .bin. Finished frames are skipped on retry. Connections: ATMO_S3.",
       "default_queue": "default",
       "default_timeout": 1800,
       "args": [
@@ -171,7 +171,7 @@
     "record_frames": {
       "entrypoint": "record_frames.py",
       "label": "Record delivered frames",
-      "description": "Writes the batch's model_forecast_tiffs / wind rows to the ETL database, idempotently.",
+      "description": "Writes the batch's model_forecast_tiffs / wind rows to the ETL database, idempotently. Connections: NWP_DB, NWP_PUBLIC.",
       "default_queue": "default",
       "default_timeout": 300,
       "args": [
@@ -183,13 +183,30 @@
           "required": true,
           "description": "Batch file written by frames.",
           "placeholder_hint": "{input.frames_json}"
+        },
+        {
+          "name": "public_prefix",
+          "kind": "flag",
+          "flag": "--public-prefix",
+          "type": "string",
+          "required": false,
+          "default": "NWP",
+          "description": "Folder of the NWP tree inside the delivery disk."
+        },
+        {
+          "name": "public_url",
+          "kind": "flag",
+          "flag": "--public-url",
+          "type": "string",
+          "required": false,
+          "description": "URL of the NWP tree. Default: the disk's own URL, else copied from another model's file_url."
         }
       ]
     },
     "point_cache": {
       "entrypoint": "point_cache.py",
       "label": "Point cache (Redis)",
-      "description": "build: load a finished run's TIFFs into the Redis point cache. delete / exists: maintenance.",
+      "description": "build: load a finished run's TIFFs into the Redis point cache. delete / exists: maintenance. Connections: REDIS.",
       "default_queue": "default",
       "default_timeout": 1800,
       "args": [
@@ -277,7 +294,7 @@
     "finish_run": {
       "entrypoint": "finish_run.py",
       "label": "Finish run and prune",
-      "description": "Marks the run completed and cached, removes its staging folder and prunes runs beyond keep-runs.",
+      "description": "Marks the run completed and cached, removes its staging folder and prunes runs beyond keep-runs. Connections: NWP_DB, REDIS, NWP_PUBLIC.",
       "default_queue": "default",
       "default_timeout": 600,
       "args": [
@@ -323,6 +340,15 @@
           "required": false,
           "default": 2,
           "description": "Completed runs kept."
+        },
+        {
+          "name": "public_prefix",
+          "kind": "flag",
+          "flag": "--public-prefix",
+          "type": "string",
+          "required": false,
+          "default": "NWP",
+          "description": "Folder of the NWP tree inside the delivery disk."
         }
       ]
     }

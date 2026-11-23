@@ -13,11 +13,12 @@ A frame whose TIFF (and .bin) already exists is skipped, so a retried batch only
 what is missing. Outputs are written under a temporary name and renamed.
 
 The wind .bin needs grib2json (https://github.com/weacast/weacast-grib2json, the tool the
-legacy app uses). Set GRIB2JSON_BIN to the `bin/grib2json` launcher of a checkout; Java 8
-comes with the PyNWP env. Without GRIB2JSON_BIN the batch still succeeds and reports
-wind_bin = 0, and the flow skips the .bin delivery.
+legacy app uses), found at /opt/flow/grib2json/bin/grib2json or wherever GRIB2JSON_BIN
+points; Java 8 comes with the PyNWP env. On a machine without it the batch still
+succeeds and reports wind_bin = 0, and the flow skips the .bin delivery.
 
-Environment: ATMO_S3_* (see atmo_common), GDAL_TRANSLATE_BIN, GRIB2JSON_BIN, PROJ_LIB.
+Environment: ATMO_S3_* (the node's ATMO_S3 connection, see atmo_common); optional
+overrides GDAL_TRANSLATE_BIN, GRIB2JSON_BIN, PROJ_LIB.
 """
 import argparse
 import gzip
@@ -31,6 +32,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 import atmo_common as ac
+
+# Where deploy/envs/pynwp.yml installs the weacast-grib2json checkout.
+GRIB2JSON_DEFAULT = "/opt/flow/grib2json/bin/grib2json"
 
 REQUIRED = ["mean_sea_level_pressure", "2m_temperature", "2m_dewpoint_temperature",
             "10m_u_component_of_wind", "10m_v_component_of_wind", "total_cloud_cover", "reflectivity"]
@@ -293,9 +297,10 @@ def main():
     if not os.path.exists(os.path.join(run_directory, "meta.json")):
         ac.fail("frames: %s has no meta.json - the atmo-v2-run flow has not prepared this run" % run_directory)
     init = ac.init_time(args.run_id)
-    grib2json = ac.env("GRIB2JSON_BIN")
+    grib2json = ac.env("GRIB2JSON_BIN") or (GRIB2JSON_DEFAULT if os.path.exists(GRIB2JSON_DEFAULT) else None)
     if not grib2json:
-        ac.log("frames: GRIB2JSON_BIN is not set - wind .bin files are not produced")
+        ac.log("frames: no grib2json at %s (or GRIB2JSON_BIN) - wind .bin files are not produced"
+               % GRIB2JSON_DEFAULT)
 
     steps = list(range(args.step_from, args.step_to + 1))
     jobs = [{"run_dir": run_directory, "zarr": args.zarr, "model": args.model, "run_id": args.run_id,

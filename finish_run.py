@@ -5,11 +5,12 @@ the atmo-v2-cache flow, so it only runs after the point cache was built.
 
 Pruning keeps the newest --keep-runs completed runs of this model. For every older run it
 removes the database rows and the Redis keys. The delivered TIFF / .bin folders are removed
-too when the public tree is reachable as a local path (NWP_PUBLIC_ROOT); when it is not
-(an SFTP or S3 disk), they are listed in the manifest as `stale_folders` for whatever owns
-that storage to expire.
+too when the public tree exists as a local path on this machine (the delivery disk's root
++ --public-prefix); when it does not (an SFTP or S3 disk), they are listed in the manifest
+as `stale_folders` for whatever owns that storage to expire.
 
-Environment: NWP_DB_*, REDIS_* (see point_cache), NWP_PUBLIC_ROOT (optional).
+Environment: NWP_DB_*, REDIS_*, NWP_PUBLIC_ROOT (the node's NWP_DB, REDIS and NWP_PUBLIC
+connections).
 """
 import argparse
 import os
@@ -61,9 +62,10 @@ def main():
     p.add_argument("--run-id", required=True)
     p.add_argument("--forecast-id", type=int, required=True)
     p.add_argument("--keep-runs", type=int, default=2, help="completed runs kept on disk and in the database")
+    p.add_argument("--public-prefix", default="NWP", help="folder of the NWP tree inside the delivery disk")
     args = p.parse_args()
 
-    public_root = (ac.env("NWP_PUBLIC_ROOT") or "").rstrip("/")
+    public_root = ac.public_root(args.public_prefix)
     connection = ac.db_connect()
     removed, stale = [], []
     try:

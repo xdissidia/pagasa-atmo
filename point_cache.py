@@ -20,8 +20,8 @@ Python bindings are needed. A rebuild is safe: it removes the meta key first.
 Memory: the whole cube (steps x parameters x points, float32) is held at once, exactly
 like the legacy build. 265 steps x 10 parameters on a 576 x 960 grid is about 5.9 GB.
 
-Environment: REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_USERNAME, REDIS_PASSWORD,
-GDAL_TRANSLATE_BIN, PROJ_LIB.
+Environment: REDIS_HOST, REDIS_PORT, REDIS_DATABASE, REDIS_USERNAME, REDIS_PASSWORD (the
+node's REDIS connection); optional overrides GDAL_TRANSLATE_BIN, PROJ_LIB.
 """
 import argparse
 import json
@@ -42,7 +42,7 @@ def connect():
     return redis.Redis(
         host=ac.env("REDIS_HOST", "127.0.0.1"),
         port=int(ac.env("REDIS_PORT", "6379")),
-        db=int(ac.env("REDIS_DB", "0")),
+        db=int(ac.env("REDIS_DATABASE") or ac.env("REDIS_DB", "0")),
         username=ac.env("REDIS_USERNAME"),
         password=ac.env("REDIS_PASSWORD"),
     )
