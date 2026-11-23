@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Script outputs and scratch (the scripts write to the staging root, never here)
+out/
+out_*/
+tmp/
+*.log
+*.part
+*.tmp
+
+# Secrets: everything arrives through the flow node's env map
+.env
+.env.*
+*.pem
+*.key
+credentials*
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

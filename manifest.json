@@ -1,0 +1,330 @@
+{
+  "manifest_version": 1,
+  "label": "ATMO v5 forecast",
+  "description": "ATMO v5 zarr runs on S3 into 10-band COG TIFFs, wind-particle .bin files and the Redis point cache. Ported from panahon-nwp (branch v1.2).",
+  "default_runtime": "python@3.12-nwp",
+  "scripts": {
+    "find_run": {
+      "entrypoint": "find_run.py",
+      "label": "Find and claim run",
+      "description": "Halts unless a complete, unclaimed run is on S3. Prepares the grid, creates the model_forecasts row and emits the run with its batches.",
+      "default_queue": "default",
+      "default_timeout": 300,
+      "args": [
+        {
+          "name": "model",
+          "kind": "flag",
+          "flag": "--model",
+          "type": "string",
+          "required": false,
+          "default": "atmo-v2",
+          "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
+        },
+        {
+          "name": "work_dir",
+          "kind": "flag",
+          "flag": "--work-dir",
+          "type": "path",
+          "required": true,
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+        },
+        {
+          "name": "steps",
+          "kind": "flag",
+          "flag": "--steps",
+          "type": "int",
+          "required": false,
+          "default": 769,
+          "description": "15-minute frames to process, starting at 0."
+        },
+        {
+          "name": "batch_size",
+          "kind": "flag",
+          "flag": "--batch-size",
+          "type": "int",
+          "required": false,
+          "default": 96,
+          "description": "Frames per batch; 96 is one forecast day."
+        },
+        {
+          "name": "run",
+          "kind": "flag",
+          "flag": "--run",
+          "type": "string",
+          "required": false,
+          "description": "Process this run folder instead of the newest, e.g. v5-20261113_180000."
+        },
+        {
+          "name": "stalled_minutes",
+          "kind": "flag",
+          "flag": "--stalled-minutes",
+          "type": "int",
+          "required": false,
+          "default": 120,
+          "description": "Re-claim a started run that recorded no frame for this long."
+        }
+      ]
+    },
+    "rain_total": {
+      "entrypoint": "rain_total.py",
+      "label": "Running rain total",
+      "description": "Downloads every precipitation chunk of the run and writes the running total each frame's TPRATE band uses. Re-emits the run manifest.",
+      "default_queue": "default",
+      "default_timeout": 1800,
+      "args": [
+        {
+          "name": "run_json",
+          "kind": "flag",
+          "flag": "--run-json",
+          "type": "path",
+          "required": true,
+          "description": "run.json written by find_run.",
+          "placeholder_hint": "{input.run_json}"
+        }
+      ]
+    },
+    "frames": {
+      "entrypoint": "frames.py",
+      "label": "Build a batch of frames",
+      "description": "For each frame in the batch: download chunks, build the COG TIFF and (with GRIB2JSON_BIN) the wind .bin. Finished frames are skipped on retry.",
+      "default_queue": "default",
+      "default_timeout": 1800,
+      "args": [
+        {
+          "name": "model",
+          "kind": "flag",
+          "flag": "--model",
+          "type": "string",
+          "required": false,
+          "default": "atmo-v2",
+          "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
+        },
+        {
+          "name": "work_dir",
+          "kind": "flag",
+          "flag": "--work-dir",
+          "type": "path",
+          "required": true,
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+        },
+        {
+          "name": "run_id",
+          "kind": "flag",
+          "flag": "--run-id",
+          "type": "string",
+          "required": true,
+          "placeholder_hint": "{trigger.run_id}"
+        },
+        {
+          "name": "zarr",
+          "kind": "flag",
+          "flag": "--zarr",
+          "type": "string",
+          "required": true,
+          "placeholder_hint": "{trigger.zarr}"
+        },
+        {
+          "name": "forecast_id",
+          "kind": "flag",
+          "flag": "--forecast-id",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{trigger.forecast_id}"
+        },
+        {
+          "name": "batch_no",
+          "kind": "flag",
+          "flag": "--batch-no",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{trigger.batch_no}"
+        },
+        {
+          "name": "step_from",
+          "kind": "flag",
+          "flag": "--step-from",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{trigger.step_from}"
+        },
+        {
+          "name": "step_to",
+          "kind": "flag",
+          "flag": "--step-to",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{trigger.step_to}"
+        },
+        {
+          "name": "workers",
+          "kind": "flag",
+          "flag": "--workers",
+          "type": "int",
+          "required": false,
+          "default": 4,
+          "description": "Frames built at the same time."
+        }
+      ]
+    },
+    "record_frames": {
+      "entrypoint": "record_frames.py",
+      "label": "Record delivered frames",
+      "description": "Writes the batch's model_forecast_tiffs / wind rows to the ETL database, idempotently.",
+      "default_queue": "default",
+      "default_timeout": 300,
+      "args": [
+        {
+          "name": "frames_json",
+          "kind": "flag",
+          "flag": "--frames-json",
+          "type": "path",
+          "required": true,
+          "description": "Batch file written by frames.",
+          "placeholder_hint": "{input.frames_json}"
+        }
+      ]
+    },
+    "point_cache": {
+      "entrypoint": "point_cache.py",
+      "label": "Point cache (Redis)",
+      "description": "build: load a finished run's TIFFs into the Redis point cache. delete / exists: maintenance.",
+      "default_queue": "default",
+      "default_timeout": 1800,
+      "args": [
+        {
+          "name": "action",
+          "kind": "positional",
+          "type": "choice",
+          "required": true,
+          "choices": [
+            "build",
+            "delete",
+            "exists"
+          ]
+        },
+        {
+          "name": "model",
+          "kind": "flag",
+          "flag": "--model",
+          "type": "string",
+          "required": false,
+          "default": "atmo-v2",
+          "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
+        },
+        {
+          "name": "work_dir",
+          "kind": "flag",
+          "flag": "--work-dir",
+          "type": "path",
+          "required": false,
+          "description": "Staging folder holding one folder per run (build).",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+        },
+        {
+          "name": "run_id",
+          "kind": "flag",
+          "flag": "--run-id",
+          "type": "string",
+          "required": false,
+          "placeholder_hint": "{trigger.members.0.run_id}"
+        },
+        {
+          "name": "forecast_id",
+          "kind": "flag",
+          "flag": "--forecast-id",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{trigger.members.0.forecast_id}"
+        },
+        {
+          "name": "steps",
+          "kind": "flag",
+          "flag": "--steps",
+          "type": "int",
+          "required": false,
+          "default": 769
+        },
+        {
+          "name": "tiff_dir",
+          "kind": "flag",
+          "flag": "--tiff-dir",
+          "type": "path",
+          "required": false,
+          "description": "Read the TIFFs from here instead of the staging run folder."
+        },
+        {
+          "name": "quarter_hour_span_hours",
+          "kind": "flag",
+          "flag": "--quarter-hour-span-hours",
+          "type": "int",
+          "required": false,
+          "default": 24,
+          "description": "Every 15-minute frame for this many hours, then hourly."
+        },
+        {
+          "name": "ttl",
+          "kind": "flag",
+          "flag": "--ttl",
+          "type": "int",
+          "required": false,
+          "default": 86400,
+          "description": "Seconds a key lives."
+        }
+      ]
+    },
+    "finish_run": {
+      "entrypoint": "finish_run.py",
+      "label": "Finish run and prune",
+      "description": "Marks the run completed and cached, removes its staging folder and prunes runs beyond keep-runs.",
+      "default_queue": "default",
+      "default_timeout": 600,
+      "args": [
+        {
+          "name": "model",
+          "kind": "flag",
+          "flag": "--model",
+          "type": "string",
+          "required": false,
+          "default": "atmo-v2",
+          "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
+        },
+        {
+          "name": "work_dir",
+          "kind": "flag",
+          "flag": "--work-dir",
+          "type": "path",
+          "required": true,
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+        },
+        {
+          "name": "run_id",
+          "kind": "flag",
+          "flag": "--run-id",
+          "type": "string",
+          "required": true,
+          "placeholder_hint": "{input.run_id}"
+        },
+        {
+          "name": "forecast_id",
+          "kind": "flag",
+          "flag": "--forecast-id",
+          "type": "int",
+          "required": true,
+          "placeholder_hint": "{input.forecast_id}"
+        },
+        {
+          "name": "keep_runs",
+          "kind": "flag",
+          "flag": "--keep-runs",
+          "type": "int",
+          "required": false,
+          "default": 2,
+          "description": "Completed runs kept."
+        }
+      ]
+    }
+  }
+}
