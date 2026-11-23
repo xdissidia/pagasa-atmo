@@ -1,13 +1,14 @@
 # pagasa-atmo
 
-The `atmo` script group of the Flow orchestration engine: ATMO v5 forecast runs
+The `pagasa-atmo` script group of the Flow orchestration engine: ATMO v5 forecast runs
 (zarr on S3) into 10-band COG TIFFs, wind-particle `.bin` files and the Redis
 point cache, published as model `atmo-v2`. Ported from panahon-nwp, branch v1.2.
 
-Clone it as the folder **`atmo`** inside the scripts tree (`FLOWS_SCRIPTS_ROOT`);
-flow nodes reference the scripts as `atmo/<name>`:
+Clone it under its own name inside the scripts tree (`FLOWS_SCRIPTS_ROOT`). The
+folder name IS the group name, so flow nodes reference the scripts as
+`pagasa-atmo/<name>` and renaming the folder breaks every flow that uses them:
 
-    git clone <this repo> /mnt/data/home/ict/flow-scripts/atmo
+    git clone <this repo> /mnt/data/home/ict/flow-scripts/pagasa-atmo
 
 | Script | Does |
 |---|---|
