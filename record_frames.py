@@ -14,6 +14,12 @@ Those tables carry no unique indexes, so every write here is find-then-insert in
 transaction that first locks the run's model_forecasts row: a redelivered job waits for
 the first copy and then finds its rows already there.
 
+They also carry no index on model_forecast_id and hold hundreds of thousands of rows, so
+a lookup per frame is a full table scan per frame - minutes per batch, with the lock
+held, while the run's other batches time out waiting for it. What the run already has
+is therefore read ONCE per table and matched in memory, and the session is told to wait
+for the lock rather than give up after MariaDB's default 50 seconds.
+
 Environment: NWP_DB_* (the node's NWP_DB connection) and NWP_PUBLIC_ROOT (root of the
 node's NWP_PUBLIC delivery disk). file_path is stored as that root + --public-prefix +
 the file, the absolute path on the serving host, like legacy.
@@ -29,15 +35,22 @@ import os
 import atmo_common as ac
 
 
-def find_or_insert(cursor, table, where, values):
-    """Returns (id, created). `where` identifies the row; `values` are the extra columns."""
-    clause = " AND ".join("`%s` = %%s" % column for column in where)
-    cursor.execute("SELECT id FROM `%s` WHERE %s ORDER BY id LIMIT 1" % (table, clause), list(where.values()))
-    row = cursor.fetchone()
-    if row:
-        return row["id"], False
+# Seconds to wait for the run's lock. All batches of a run finish close together and
+# record one after another; must stay under the node timeout (300 s).
+LOCK_WAIT_SECONDS = 240
+
+
+def existing(cursor, table, forecast_id, key_columns):
+    """{key: id} of the rows this run already has in a table - one scan, not one per frame."""
+    cursor.execute("SELECT id, %s FROM `%s` WHERE model_forecast_id = %%s ORDER BY id DESC"
+                   % (", ".join("`%s`" % c for c in key_columns), table), (forecast_id,))
+    # Newest first, so the dict ends up holding the OLDEST id of any duplicate.
+    return {tuple(str(row[c]) for c in key_columns): row["id"] for row in cursor.fetchall()}
+
+
+def insert(cursor, table, values):
     now = ac.utc_now()
-    return ac.insert_row(cursor, table, {**where, **values, "created_at": now, "updated_at": now}), True
+    return ac.insert_row(cursor, table, {**values, "created_at": now, "updated_at": now})
 
 
 def public_url_base(cursor, args):
@@ -80,6 +93,7 @@ def main():
                 rel = folder + "/" + os.path.basename(path)
                 return public_url + "/" + rel, (public_root + "/" + rel) if public_root else rel
 
+            cursor.execute("SET SESSION innodb_lock_wait_timeout = %s", (LOCK_WAIT_SECONDS,))
             cursor.execute("SELECT id, nwp_model_id FROM model_forecasts WHERE id = %s FOR UPDATE", (forecast_id,))
             forecast = cursor.fetchone()
             if not forecast:
@@ -87,41 +101,50 @@ def main():
             model_id = forecast["nwp_model_id"]
             now = ac.utc_now()
 
+            has_wind = any(frame.get("bin") for frame in batch["frames"])
+            tiffs = existing(cursor, "model_forecast_tiffs", forecast_id, ["header_forecast_time"])
+            files = existing(cursor, "model_forecast_files", forecast_id, ["file"]) if has_wind else {}
+            variables = existing(cursor, "model_forecast_file_variables", forecast_id,
+                                 ["model_forecast_file_id", "variable"]) if has_wind else {}
+            winds = existing(cursor, "model_forecast_data", forecast_id,
+                             ["variable", "forecast_time"]) if has_wind else {}
+
             for frame in batch["frames"]:
                 url, path = located(batch["tiff_folder"], frame["tiff"])
-                tiff_id, new = find_or_insert(
-                    cursor, "model_forecast_tiffs",
-                    {"model_forecast_id": forecast_id, "header_forecast_time": frame["minutes"]},
-                    {"nwp_model_id": model_id, "parameters": "|".join(ac.MODEL_PARAMETERS),
-                     "header_parameters": frame["header_parameters"],
-                     "forecast_time": frame["forecast_time"], "file_url": url, "file_path": path})
-                if new:
-                    created["tiffs"] += 1
-                else:
+                key = (str(frame["minutes"]),)
+                if key in tiffs:
                     cursor.execute("UPDATE model_forecast_tiffs SET file_url = %s, file_path = %s, updated_at = %s "
-                                   "WHERE id = %s", (url, path, now, tiff_id))
+                                   "WHERE id = %s", (url, path, now, tiffs[key]))
+                else:
+                    tiffs[key] = insert(cursor, "model_forecast_tiffs", {
+                        "model_forecast_id": forecast_id, "header_forecast_time": frame["minutes"],
+                        "nwp_model_id": model_id, "parameters": "|".join(ac.MODEL_PARAMETERS),
+                        "header_parameters": frame["header_parameters"],
+                        "forecast_time": frame["forecast_time"], "file_url": url, "file_path": path})
+                    created["tiffs"] += 1
 
                 if not frame.get("bin"):
                     continue
                 url, path = located(batch["bin_folder"], frame["bin"])
-                file_id, _ = find_or_insert(
-                    cursor, "model_forecast_files",
-                    {"model_forecast_id": forecast_id, "file": path},
-                    {"file_datetime": now, "read_at": now})
-                variable_id, _ = find_or_insert(
-                    cursor, "model_forecast_file_variables",
-                    {"model_forecast_file_id": file_id, "variable": "UVGRD"},
-                    {"nwp_model_id": model_id, "model_forecast_id": forecast_id,
-                     "processed_at": now, "completed_at": now})
-                data_id, new = find_or_insert(
-                    cursor, "model_forecast_data",
-                    {"model_forecast_id": forecast_id, "variable": "UVGRD", "forecast_time": frame["forecast_time"]},
-                    {"nwp_model_id": model_id, "model_forecast_file_variable_id": variable_id, "json_path": url})
-                if new:
-                    created["winds"] += 1
-                else:
+                file_id = files.get((path,))
+                if file_id is None:
+                    file_id = files[(path,)] = insert(cursor, "model_forecast_files", {
+                        "model_forecast_id": forecast_id, "file": path, "file_datetime": now, "read_at": now})
+                variable_id = variables.get((str(file_id), "UVGRD"))
+                if variable_id is None:
+                    variable_id = variables[(str(file_id), "UVGRD")] = insert(
+                        cursor, "model_forecast_file_variables", {
+                            "model_forecast_file_id": file_id, "variable": "UVGRD", "nwp_model_id": model_id,
+                            "model_forecast_id": forecast_id, "processed_at": now, "completed_at": now})
+                key = ("UVGRD", frame["forecast_time"])
+                if key in winds:
                     cursor.execute("UPDATE model_forecast_data SET json_path = %s, updated_at = %s WHERE id = %s",
-                                   (url, now, data_id))
+                                   (url, now, winds[key]))
+                else:
+                    winds[key] = insert(cursor, "model_forecast_data", {
+                        "model_forecast_id": forecast_id, "variable": "UVGRD", "forecast_time": frame["forecast_time"],
+                        "nwp_model_id": model_id, "model_forecast_file_variable_id": variable_id, "json_path": url})
+                    created["winds"] += 1
 
             cursor.execute("SELECT COUNT(*) AS n FROM model_forecast_tiffs WHERE model_forecast_id = %s", (forecast_id,))
             total = cursor.fetchone()["n"]

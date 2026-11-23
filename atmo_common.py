@@ -387,9 +387,15 @@ def utc_now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+_COLUMNS = {}
+
+
 def table_columns(cursor, table):
-    cursor.execute("SHOW COLUMNS FROM `%s`" % table)
-    return {row["Field"] for row in cursor.fetchall()}
+    """Column names of a table, read once per process (a batch inserts hundreds of rows)."""
+    if table not in _COLUMNS:
+        cursor.execute("SHOW COLUMNS FROM `%s`" % table)
+        _COLUMNS[table] = {row["Field"] for row in cursor.fetchall()}
+    return _COLUMNS[table]
 
 
 def insert_row(cursor, table, values):
