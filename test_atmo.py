@@ -69,13 +69,13 @@ class Naming(unittest.TestCase):
         self.assertIsNone(ac.RUN_PATTERN.match("v5_20260817_00"))   # the stray folder on S3
 
     def test_paths_are_shaped_like_the_legacy_model(self):
-        # Legacy atmo: ATMO/TIFF/20261114_0200UTC/ATMO_20261114_0215UTC.0001.tiff
-        self.assertEqual(ac.tiff_folder("atmo", self.INIT), "ATMO/TIFF/20261114_0200UTC")
-        self.assertEqual(ac.tiff_name("atmo", self.INIT, 1), "ATMO_20261114_0215UTC.0001.tiff")
+        # Legacy atmo (production files): ATMO/TIFF/20261114_0200PST/ATMO_20261114_0215PST.0001.tiff
+        self.assertEqual(ac.tiff_folder("atmo", self.INIT), "ATMO/TIFF/20261114_0200PST")
+        self.assertEqual(ac.tiff_name("atmo", self.INIT, 1), "ATMO_20261114_0215PST.0001.tiff")
         # Legacy atmo: ATMO/BIN/20261114_0200PST/ATMO_UVGRD_20261114_0215PST.0001.bin
         self.assertEqual(ac.bin_folder("atmo", self.INIT), "ATMO/BIN/20261114_0200PST")
         self.assertEqual(ac.bin_name("atmo", self.INIT, 1), "ATMO_UVGRD_20261114_0215PST.0001.bin")
-        self.assertEqual(ac.tiff_name("atmo", self.INIT, 768), "ATMO_20261122_0200UTC.0768.tiff")
+        self.assertEqual(ac.tiff_name("atmo", self.INIT, 768), "ATMO_20261122_0200PST.0768.tiff")
 
     def test_forecast_time_is_manila_local(self):
         self.assertEqual(ac.manila_naive(self.INIT), "2026-11-14 02:00:00")

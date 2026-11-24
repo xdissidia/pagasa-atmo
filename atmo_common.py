@@ -121,11 +121,12 @@ def step_name(step):
     return "%04d" % step
 
 
-# The legacy app formats these with PHP's "Ymd_HiT". Its TIFF names shift a UTC-labelled
-# time by +8 h, and its .bin names use a real Asia/Manila time, whose abbreviation is PST.
-# Both quirks are kept so flow paths are shaped exactly like legacy atmo's.
+# The legacy app formats these with PHP's "Ymd_HiT" while running in Asia/Manila, so both
+# the TIFF and the .bin stamps are Manila time labelled PST (TIFF/20261124_0200PST/
+# ATMO_20261124_0215PST.0001.tiff) - verified against production's files on 2026-11-24.
+# They must match exactly: the flows overwrite legacy's folders, and consumers build URLs.
 def tiff_stamp(moment_utc):
-    return (moment_utc + timedelta(hours=8)).strftime("%Y%m%d_%H%M") + "UTC"
+    return (moment_utc + timedelta(hours=8)).strftime("%Y%m%d_%H%M") + "PST"
 
 
 def bin_stamp(moment_utc):
