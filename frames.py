@@ -222,6 +222,24 @@ def to_wind_bin(grib2json, wind_grib, bin_out):
     os.replace(partial, bin_out)
 
 
+def die_with_parent():
+    """Pool worker initializer: take SIGTERM the moment the batch process dies.
+
+    When a batch outlives its node timeout the engine kills the batch process, and only
+    that one. Its pool workers used to live on as orphans, downloading and writing the
+    same frames as the retry that follows. Linux can tie a child's life to its parent's.
+    """
+    try:
+        import ctypes
+        import signal
+
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
+        if os.getppid() == 1:           # the parent died before the call took effect
+            os._exit(1)
+    except Exception:                   # not Linux: nothing to tie
+        pass
+
+
 def process_step(job):
     """One frame. Runs in a worker process; returns the frame record."""
     run_directory, zarr, model, step, grib2json = (
@@ -307,7 +325,7 @@ def main():
              "step": step, "grib2json": grib2json} for step in steps]
 
     records, errors = [], []
-    with ProcessPoolExecutor(max_workers=max(1, args.workers)) as pool:
+    with ProcessPoolExecutor(max_workers=max(1, args.workers), initializer=die_with_parent) as pool:
         futures = [pool.submit(process_step, job) for job in jobs]
         for done, future in enumerate(as_completed(futures), start=1):
             try:
