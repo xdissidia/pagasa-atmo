@@ -1,4 +1,4 @@
-"""Shared helpers for the atmo-v2 flow scripts.
+"""Shared helpers for the atmo flow scripts.
 
 Ported from panahon-nwp (branch v1.2) storage/script/atmo/atmo_common.py and
 app/Traits/S5cmd.php / app/Support/AtmoV5.php, with the flow node contract added.
@@ -113,7 +113,7 @@ def init_time(run_id):
 
 
 def model_prefix(model):
-    """atmo-v2 -> ATMO-V2: folder and file-name prefix on the public disk."""
+    """atmo -> ATMO: folder and file-name prefix on the public disk."""
     return model.upper()
 
 
@@ -123,7 +123,7 @@ def step_name(step):
 
 # The legacy app formats these with PHP's "Ymd_HiT". Its TIFF names shift a UTC-labelled
 # time by +8 h, and its .bin names use a real Asia/Manila time, whose abbreviation is PST.
-# Both quirks are kept so atmo-v2 paths are shaped exactly like atmo's.
+# Both quirks are kept so flow paths are shaped exactly like legacy atmo's.
 def tiff_stamp(moment_utc):
     return (moment_utc + timedelta(hours=8)).strftime("%Y%m%d_%H%M") + "UTC"
 

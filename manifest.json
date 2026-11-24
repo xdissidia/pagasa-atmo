@@ -17,7 +17,7 @@
           "flag": "--model",
           "type": "string",
           "required": false,
-          "default": "atmo-v2",
+          "default": "atmo",
           "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
         },
         {
@@ -26,8 +26,8 @@
           "flag": "--work-dir",
           "type": "path",
           "required": true,
-          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
-          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo"
         },
         {
           "name": "steps",
@@ -97,7 +97,7 @@
           "flag": "--model",
           "type": "string",
           "required": false,
-          "default": "atmo-v2",
+          "default": "atmo",
           "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
         },
         {
@@ -106,8 +106,8 @@
           "flag": "--work-dir",
           "type": "path",
           "required": true,
-          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
-          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo"
         },
         {
           "name": "run_id",
@@ -227,7 +227,7 @@
           "flag": "--model",
           "type": "string",
           "required": false,
-          "default": "atmo-v2",
+          "default": "atmo",
           "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
         },
         {
@@ -237,7 +237,7 @@
           "type": "path",
           "required": false,
           "description": "Staging folder holding one folder per run (build).",
-          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo"
         },
         {
           "name": "run_id",
@@ -304,7 +304,7 @@
           "flag": "--model",
           "type": "string",
           "required": false,
-          "default": "atmo-v2",
+          "default": "atmo",
           "description": "nwp_models.model_name to publish as; also the folder and file prefix (upper-cased)."
         },
         {
@@ -313,8 +313,8 @@
           "flag": "--work-dir",
           "type": "path",
           "required": true,
-          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo-v2 node.",
-          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo-v2"
+          "description": "Staging folder holding one folder per run. Must be the same shared path for every atmo node.",
+          "placeholder_hint": "{env.FLOWS_STAGING_ROOT}/nwp/atmo"
         },
         {
           "name": "run_id",

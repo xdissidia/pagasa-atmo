@@ -3,7 +3,7 @@
 Port of AtmoPointCacheWorker + atmo_point_cache.py (panahon-nwp v1.2).
 
 usage:
-  point_cache.py build  --work-dir D --run-id R --forecast-id N --steps 769 [--model atmo-v2] [--tiff-dir T]
+  point_cache.py build  --work-dir D --run-id R --forecast-id N --steps 769 [--model atmo] [--tiff-dir T]
   point_cache.py delete --forecast-id N
   point_cache.py exists --forecast-id N        (exit 0 when the run is fully cached)
 
@@ -201,7 +201,7 @@ def exists(forecast_id):
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("action", choices=["build", "delete", "exists"])
-    p.add_argument("--model", default="atmo-v2")
+    p.add_argument("--model", default="atmo")
     p.add_argument("--work-dir")
     p.add_argument("--run-id")
     p.add_argument("--forecast-id", type=int, required=True)

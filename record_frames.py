@@ -2,7 +2,7 @@
 
 Runs after the batch's TIFFs (and wind .bin files) were delivered to the public disk.
 Writes what the legacy AtmoStepWorker / ParameterWorker write, so consumers of
-panahon_models_etl see atmo-v2 exactly like atmo:
+panahon_models_etl see the flow-built atmo exactly like legacy:
 
   model_forecast_tiffs            one row per frame
   model_forecast_files            ) one row each per wind .bin,
@@ -26,7 +26,7 @@ the file, the absolute path on the serving host, like legacy.
 
 The public URL base comes from --public-url, else NWP_PUBLIC_URL (a disk that declares
 one) + the prefix, else it is read off the newest file_url another model already has in
-the database, so atmo-v2 links are shaped exactly like the ones consumers use today.
+the database, so these links are shaped exactly like the ones consumers use today.
 """
 import argparse
 import json

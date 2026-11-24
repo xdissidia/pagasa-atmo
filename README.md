@@ -2,7 +2,7 @@
 
 The `pagasa-atmo` script group of the Flow orchestration engine: ATMO v5 forecast runs
 (zarr on S3) into 10-band COG TIFFs, wind-particle `.bin` files and the Redis
-point cache, published as model `atmo-v2`. Ported from panahon-nwp, branch v1.2.
+point cache, published as model `atmo`. Ported from panahon-nwp, branch v1.2.
 
 Clone it under its own name inside the scripts tree (`FLOWS_SCRIPTS_ROOT`). The
 folder name IS the group name, so flow nodes reference the scripts as
@@ -19,7 +19,7 @@ folder name IS the group name, so flow nodes reference the scripts as
 | `point_cache` | builds / deletes / checks the Redis point cache |
 | `finish_run` | marks the run complete, cleans up, prunes old runs |
 
-The flows that use them are seeded by `AtmoV2FlowSeeder` in the Flow app; its
+The flows that use them are seeded by `AtmoFlowSeeder` in the Flow app; its
 docblock lists the worker `.env` values, and `deploy/envs/pynwp.yml` there is the
 conda environment (`PyNWP`, runtime `python@3.12-nwp`).
 

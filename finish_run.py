@@ -1,7 +1,7 @@
 """Close an ATMO run: mark it complete and cached, drop its working files, prune old runs.
 
 Port of AtmoStepWorker::finish + AtmoV5::prune / deleteRun (panahon-nwp v1.2). Last node of
-the atmo-v2-cache flow, so it only runs after the point cache was built.
+the atmo-cache flow, so it only runs after the point cache was built.
 
 Pruning keeps the newest --keep-runs completed runs of this model. For every older run it
 removes the database rows and the Redis keys. The delivered TIFF / .bin folders are removed
@@ -57,7 +57,7 @@ def delete_run(cursor, forecast, model, work_dir, public_root):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--model", default="atmo-v2")
+    p.add_argument("--model", default="atmo")
     p.add_argument("--work-dir", required=True)
     p.add_argument("--run-id", required=True)
     p.add_argument("--forecast-id", type=int, required=True)
@@ -87,7 +87,7 @@ def main():
             cursor.execute("UPDATE model_forecasts SET is_completed = 1, is_cached = 1, updated_at = %s WHERE id = %s",
                            (ac.utc_now(), args.forecast_id))
             ac.model_message(cursor, forecast["nwp_model_id"],
-                             "AtmoV2 (%s) : COMPLETED, %d frames, cached" % (args.run_id, frames))
+                             "Atmo (%s) : COMPLETED, %d frames, cached" % (args.run_id, frames))
 
             # Newest first. Runs newer than the last one we keep stay, finished or not.
             cursor.execute("SELECT id, initialized_time, is_completed FROM model_forecasts "

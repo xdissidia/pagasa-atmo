@@ -298,7 +298,7 @@ def process_step(job):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--model", default="atmo-v2")
+    p.add_argument("--model", default="atmo")
     p.add_argument("--work-dir", required=True)
     p.add_argument("--run-id", required=True)
     p.add_argument("--zarr", required=True)
@@ -313,7 +313,7 @@ def main():
         ac.fail("frames: --step-to is before --step-from", 2)
     run_directory = ac.run_dir(args.work_dir, args.run_id)
     if not os.path.exists(os.path.join(run_directory, "meta.json")):
-        ac.fail("frames: %s has no meta.json - the atmo-v2-run flow has not prepared this run" % run_directory)
+        ac.fail("frames: %s has no meta.json - the atmo-run flow has not prepared this run" % run_directory)
     init = ac.init_time(args.run_id)
     grib2json = ac.env("GRIB2JSON_BIN") or (GRIB2JSON_DEFAULT if os.path.exists(GRIB2JSON_DEFAULT) else None)
     if not grib2json:

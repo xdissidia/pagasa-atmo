@@ -1,7 +1,7 @@
 """Find the next ATMO v5 run to process and claim it.
 
 Port of `app:atmo-run` + AtmoV5::prepareRun (panahon-nwp v1.2). First node of the
-atmo-v2-run flow; ticks every 15 minutes and halts unless a complete run that has not
+atmo-run flow; ticks every 15 minutes and halts unless a complete run that has not
 been claimed yet is on S3.
 
 When it claims a run it
@@ -21,7 +21,7 @@ import atmo_common as ac
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--model", default="atmo-v2", help="nwp_models.model_name to publish as")
+    p.add_argument("--model", default="atmo", help="nwp_models.model_name to publish as")
     p.add_argument("--work-dir", required=True, help="staging folder that holds one folder per run")
     p.add_argument("--steps", type=int, default=769, help="15-minute frames to process, starting at 0")
     p.add_argument("--batch-size", type=int, default=96, help="frames per batch (96 = one forecast day)")
@@ -99,7 +99,7 @@ def prepare(run_directory, zarr):
 
 
 def ensure_model(cursor, model, steps):
-    """The nwp_models row atmo-v2 publishes under; created on first use.
+    """The nwp_models row the model publishes under; created on first use.
     Locked FOR UPDATE: it is the mutex that keeps two ticks from claiming one run."""
     cursor.execute("SELECT id FROM nwp_models WHERE model_name = %s FOR UPDATE", (model,))
     row = cursor.fetchone()
@@ -164,7 +164,7 @@ def claim(connection, args, run_id, zarr, init):
                 "created_at": now,
                 "updated_at": now,
             })
-        ac.model_message(cursor, model_id, "AtmoV2 (%s) : START, %d frames" % (run_id, args.steps))
+        ac.model_message(cursor, model_id, "Atmo (%s) : START, %d frames" % (run_id, args.steps))
     connection.commit()
     return forecast_id, None
 
