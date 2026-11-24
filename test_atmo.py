@@ -5,10 +5,16 @@
 No S3, database or Redis needed. The rain-total tests need numpy and are skipped
 without it, so the file also runs under a bare system python.
 """
+import contextlib
+import io
+import json
+import types
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest import mock
 
 import atmo_common as ac
+import find_run
 
 try:
     import numpy as np
@@ -117,6 +123,48 @@ class RainTotal(unittest.TestCase):
     def test_all_dry_is_all_zero(self):
         got, _ = self.totals([0.0] * 12)
         np.testing.assert_array_equal(got, np.zeros(13))
+
+
+class CheckOnly(unittest.TestCase):
+    """find_run --check-only: the atmo-run precheck. S3 and the database are stubbed."""
+
+    RUN = "v5-20261124_000000"
+
+    def check(self, row, found=(RUN, "s3://bucket/v5-20261124_000000.zarr")):
+        cursor = mock.MagicMock()
+        cursor.fetchone.return_value = row
+        connection = mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        args = types.SimpleNamespace(run="", model="atmo", steps=769, stalled_minutes=120)
+        out = io.StringIO()
+        with mock.patch.object(find_run, "find_run", return_value=found), \
+                mock.patch.object(ac, "db_connect", return_value=connection), \
+                contextlib.redirect_stdout(out):
+            find_run.check(args)
+        connection.commit.assert_not_called()
+        return json.loads(out.getvalue().strip().splitlines()[-1])
+
+    def test_new_run_is_admitted(self):
+        self.assertEqual(self.check(None), {"admit": True, "reason": self.RUN + " is new", "run_id": self.RUN})
+
+    def test_processed_run_is_not(self):
+        got = self.check({"is_completed": 1, "file_downloaded_count": 769, "updated_at": datetime.utcnow()})
+        self.assertFalse(got["admit"])
+        self.assertIn("already processed", got["reason"])
+
+    def test_run_in_progress_is_not(self):
+        got = self.check({"is_completed": 0, "file_downloaded_count": 96, "updated_at": datetime.utcnow()})
+        self.assertFalse(got["admit"])
+        self.assertIn("in progress (96 of 769", got["reason"])
+
+    def test_stalled_run_is_admitted_for_a_reclaim(self):
+        stale = datetime.utcnow() - timedelta(minutes=300)
+        got = self.check({"is_completed": 0, "file_downloaded_count": 96, "updated_at": stale})
+        self.assertTrue(got["admit"])
+
+    def test_no_complete_run_on_s3_is_not(self):
+        got = self.check(None, found=(None, "no complete ATMO v5 run found"))
+        self.assertEqual(got, {"admit": False, "reason": "no complete ATMO v5 run found"})
 
 
 if __name__ == "__main__":

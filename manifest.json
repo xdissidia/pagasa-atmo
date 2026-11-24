@@ -63,6 +63,14 @@
           "required": false,
           "default": 120,
           "description": "Re-claim a started run that recorded no frame for this long."
+        },
+        {
+          "name": "check_only",
+          "kind": "flag",
+          "flag": "--check-only",
+          "type": "bool",
+          "required": false,
+          "description": "Claim nothing; print {\"admit\": bool, \"reason\"} for the interval source's precheck."
         }
       ]
     },

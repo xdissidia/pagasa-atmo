@@ -9,6 +9,13 @@ When it claims a run it
   2. creates (or re-claims) the run's model_forecasts row in the ETL database
   3. emits the run and its batches of frames for the rest of the flow
 
+With --check-only it claims nothing and writes nothing: it is the atmo-run
+flow's source PRECHECK, asked on every tick before a flow run exists, and it
+prints {"admit": true|false, "reason": ..., "run_id": ...}. "admit" is true
+exactly when a real run of this script would claim something, so empty ticks
+never become flow runs. The run itself still decides under the row lock, so
+two checks that both say yes still produce one claim.
+
 Environment: ATMO_S3_* and NWP_DB_* (the node's ATMO_S3 and NWP_DB connections).
 """
 import argparse
@@ -28,6 +35,8 @@ def parse_args():
     p.add_argument("--run", default="", help="a specific run folder, e.g. v5-20261113_180000")
     p.add_argument("--stalled-minutes", type=int, default=120,
                    help="re-claim a started run that recorded no frame for this long")
+    p.add_argument("--check-only", action="store_true",
+                   help="only report whether there is a run to claim, as {\"admit\": bool}; writes nothing")
     return p.parse_args()
 
 
@@ -169,8 +178,43 @@ def claim(connection, args, run_id, zarr, init):
     return forecast_id, None
 
 
+def check(args):
+    """Read-only twin of claim(): would a full run claim something right now?"""
+    run_id, zarr = find_run(args.run)
+    if not run_id:
+        return ac.emit({"admit": False, "reason": zarr})
+
+    init = ac.init_time(run_id)
+    connection = ac.db_connect()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT f.is_completed, f.file_downloaded_count, f.updated_at FROM model_forecasts f "
+                "JOIN nwp_models m ON m.id = f.nwp_model_id "
+                "WHERE m.model_name = %s AND f.initialized_time = %s ORDER BY f.id LIMIT 1",
+                (args.model, init.strftime("%Y-%m-%d %H:%M:%S")),
+            )
+            existing = cursor.fetchone()
+        connection.rollback()
+    finally:
+        connection.close()
+
+    if existing:
+        if existing["is_completed"]:
+            return ac.emit({"admit": False, "reason": run_id + " is already processed", "run_id": run_id})
+        updated = existing["updated_at"]
+        if updated and updated > datetime.utcnow() - timedelta(minutes=args.stalled_minutes):
+            return ac.emit({"admit": False, "run_id": run_id, "reason": "%s is in progress (%d of %d frames)" % (
+                run_id, existing["file_downloaded_count"] or 0, args.steps)})
+        return ac.emit({"admit": True, "reason": run_id + " stalled; re-claiming", "run_id": run_id})
+    return ac.emit({"admit": True, "reason": run_id + " is new", "run_id": run_id})
+
+
 def main():
     args = parse_args()
+    if args.check_only:
+        return check(args)
+
     run_id, zarr = find_run(args.run)
     if not run_id:
         return halt(zarr)
