@@ -93,6 +93,13 @@ def main():
                 rel = folder + "/" + os.path.basename(path)
                 return public_url + "/" + rel, (public_root + "/" + rel) if public_root else rel
 
+            # End the read snapshot the URL lookup opened BEFORE waiting for the lock. The
+            # ETL server runs MariaDB 11.8 with innodb_snapshot_isolation=ON: a locking read
+            # of a row that another batch changed after this transaction's snapshot fails
+            # with error 1020 "Record has changed since last read" - and batches finishing
+            # together all update the forecast row. With no snapshot, the locking read is
+            # the transaction's first read and simply sees the latest row.
+            connection.rollback()
             cursor.execute("SET SESSION innodb_lock_wait_timeout = %s", (LOCK_WAIT_SECONDS,))
             cursor.execute("SELECT id, nwp_model_id FROM model_forecasts WHERE id = %s FOR UPDATE", (forecast_id,))
             forecast = cursor.fetchone()
